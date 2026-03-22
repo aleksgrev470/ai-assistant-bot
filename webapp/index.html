@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Ассистент</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, sans-serif; background: #f5f5f5; color: #222; }
+        .header { background: linear-gradient(135deg, #2563eb, #7c3aed); padding: 24px 20px; text-align: center; color: white; }
+        .header h1 { font-size: 22px; font-weight: 600; }
+        .header p { font-size: 14px; opacity: 0.85; margin-top: 6px; }
+        .assistants { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .card { background: white; border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+        .card:active { transform: scale(0.98); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .card-icon { font-size: 32px; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: #f0f4ff; }
+        .card-text h3 { font-size: 16px; font-weight: 600; }
+        .card-text p { font-size: 13px; color: #666; margin-top: 3px; }
+        .card-arrow { margin-left: auto; color: #aaa; font-size: 18px; }
+        .chat-screen { display: none; flex-direction: column; height: 100vh; }
+        .chat-header { background: linear-gradient(135deg, #2563eb, #7c3aed); padding: 16px 20px; color: white; display: flex; align-items: center; gap: 12px; }
+        .back-btn { cursor: pointer; font-size: 20px; }
+        .chat-header h2 { font-size: 16px; font-weight: 600; }
+        .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: #f5f5f5; }
+        .msg { max-width: 80%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; }
+        .msg.bot { background: white; align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .msg.user { background: linear-gradient(135deg, #2563eb, #7c3aed); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .typing { background: white; align-self: flex-start; padding: 12px 16px; border-radius: 16px; border-bottom-left-radius: 4px; }
+        .typing span { display: inline-block; width: 8px; height: 8px; background: #aaa; border-radius: 50%; margin: 0 2px; animation: bounce 1s infinite; }
+        .typing span:nth-child(2) { animation-delay: 0.15s; }
+        .typing span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+        .input-area { padding: 12px 16px; background: white; display: flex; gap: 10px; align-items: center; }
+        .input-area input { flex: 1; border: 1.5px solid #e0e0e0; border-radius: 24px; padding: 10px 16px; font-size: 16px; outline: none; }
+        .input-area input:focus { border-color: #2563eb; }
+        .send-btn { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #2563eb, #7c3aed); border: none; color: white; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+    <div id="home">
+        <div class="header">
+            <h1>AI Ассистент</h1>
+            <p>Выберите направление для консультации</p>
+        </div>
+        <div class="assistants">
+            <div class="card" onclick="openChat('ai','ИИ и автоматизация','🤖')">
+                <div class="card-icon">🤖</div>
+                <div class="card-text"><h3>ИИ и автоматизация</h3><p>Оптимизация бизнес-процессов</p></div>
+                <div class="card-arrow">›</div>
+            </div>
+            <div class="card" onclick="openChat('crm','CRM и ERP','📊')">
+                <div class="card-icon">📊</div>
+                <div class="card-text"><h3>CRM и ERP</h3><p>Внедрение систем управления</p></div>
+                <div class="card-arrow">›</div>
+            </div>
+            <div class="card" onclick="openChat('cyber','Кибербезопасность','🔒')">
+                <div class="card-icon">🔒</div>
+                <div class="card-text"><h3>Кибербезопасность</h3><p>Защита данных и 152-ФЗ</p></div>
+                <div class="card-arrow">›</div>
+            </div>
+            <div class="card" onclick="openChat('iot','IoT и цифровые двойники','🏭')">
+                <div class="card-icon">🏭</div>
+                <div class="card-text"><h3>IoT и цифровые двойники</h3><p>Умное производство</p></div>
+                <div class="card-arrow">›</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat" class="chat-screen">
+        <div class="chat-header">
+            <div class="back-btn" onclick="goBack()">‹</div>
+            <div>
+                <h2 id="chat-title">Ассистент</h2>
+                <div style="font-size:12px;opacity:0.8">AI на основе Claude</div>
+            </div>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Напишите сообщение..." onkeydown="if(event.key==='Enter')sendMessage()">
+            <button class="send-btn" onclick="sendMessage()">›</button>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        let currentAssistant = null;
+        let chatHistory = [];
+        const BOT_URL = window.location.origin;
+
+        function openChat(key, name, emoji) {
+            currentAssistant = key;
+            chatHistory = [];
+            document.getElementById('chat-title').textContent = emoji + ' ' + name;
+            document.getElementById('messages').innerHTML = '';
+            document.getElementById('home').style.display = 'none';
+            document.getElementById('chat').style.display = 'flex';
+            addMessage('bot', 'Здравствуйте! Меня зовут Алекс. Как вас зовут?');
+        }
+
+        function goBack() {
+            document.getElementById('chat').style.display = 'none';
+            document.getElementById('home').style.display = 'block';
+        }
+
+        function addMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + role;
+            div.textContent = text;
+            document.getElementById('messages').appendChild(div);
+            document.getElementById('messages').scrollTop = 999999;
+        }
+
+        function showTyping() {
+            const div = document.createElement('div');
+            div.className = 'typing';
+            div.id = 'typing';
+            div.innerHTML = '<span></span><span></span><span></span>';
+            document.getElementById('messages').appendChild(div);
+            document.getElementById('messages').scrollTop = 999999;
+        }
+
+        function hideTyping() {
+            const t = document.getElementById('typing');
+            if(t) t.remove();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('user-input');
+            const text = input.value.trim();
+            if(!text) return;
+            input.value = '';
+            addMessage('user', text);
+            chatHistory.push({role: 'user', content: text});
+            showTyping();
+            try {
+                const resp = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        assistant: currentAssistant,
+                        messages: chatHistory,
+                        user_id: tg.initDataUnsafe?.user?.id || '0',
+                        user_name: tg.initDataUnsafe?.user?.first_name || 'Гость'
+                    })
+                });
+                const data = await resp.json();
+                hideTyping();
+                addMessage('bot', data.reply);
+                chatHistory.push({role: 'assistant', content: data.reply});
+            } catch(e) {
+                hideTyping();
+                addMessage('bot', 'Ошибка соединения. Попробуйте ещё раз.');
+            }
+        }
+    </script>
+</body>
+</html>
