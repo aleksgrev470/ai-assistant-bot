@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+ngrok
+ngrok-v3-stable-darwin-arm64.zip
+config.py
