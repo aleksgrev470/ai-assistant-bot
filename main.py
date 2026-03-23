@@ -136,6 +136,33 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(reply)
 
+CHANNEL_USERNAME = os.environ.get("CHANNEL_USERNAME", "@axentra_it")
+
+async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Автоматически добавляет кнопку AI Ассистент под каждый пост в канале."""
+    post = update.channel_post
+    if not post:
+        return
+    # Только посты из нашего канала
+    chat = post.chat
+    if chat.username and f"@{chat.username}" != CHANNEL_USERNAME:
+        return
+    # Не трогаем посты от самого бота (чтобы не зациклиться)
+    if post.from_user and post.from_user.is_bot:
+        return
+    # Добавляем кнопку к посту
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🤖 AI Ассистент", url="https://t.me/ITAxentra_bot/app")
+    ]])
+    try:
+        await context.bot.edit_message_reply_markup(
+            chat_id=post.chat_id,
+            message_id=post.message_id,
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logging.warning(f"Не удалось добавить кнопку к посту: {e}")
+
 def run_flask():
     app.run(host="0.0.0.0", port=PORT)
 
@@ -147,8 +174,10 @@ def main():
     tg_app.add_handler(CommandHandler("start", start))
     tg_app.add_handler(CallbackQueryHandler(handle_choice, pattern="^assistant_"))
     tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
+    # Обработчик постов канала — добавляет кнопку автоматически
+    tg_app.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_channel_post))
     print("Bot started!")
-    tg_app.run_polling()
+    tg_app.run_polling(allowed_updates=["message", "callback_query", "channel_post"])
 
 if __name__ == "__main__":
     main()
