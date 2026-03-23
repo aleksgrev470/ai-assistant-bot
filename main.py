@@ -61,20 +61,22 @@ def chat():
         return jsonify({"reply": f"Приятно познакомиться, {last_msg}! Укажите ваш номер телефона:"})
     if not session["phone"]:
         session["phone"] = last_msg
-        reply = ask_claude(ASSISTANTS[assistant_key]["prompt"], [{"role": "user", "content": f"Меня зовут {session[chr(39)]name[chr(39)]}, телефон {session[chr(39)]phone[chr(39)]}"}])
+        name = session["name"]
+        phone = session["phone"]
+        reply = ask_claude(ASSISTANTS[assistant_key]["prompt"], [{"role": "user", "content": f"Меня зовут {name}, телефон {phone}"}])
         return jsonify({"reply": reply})
     prompt = ASSISTANTS[assistant_key]["prompt"] + "\n\nЕсли собрал имя, телефон, компанию, задачу и бюджет — напиши ЛИД_ГОТОВ в конце."
     reply = ask_claude(prompt, messages)
     if "ЛИД_ГОТОВ" in reply:
         reply = reply.replace("ЛИД_ГОТОВ", "").strip()
-        dialog = "\n".join([f"{m[chr(39)]role[chr(39)]}: {m[chr(39)]content[chr(39)]}" for m in messages])
+        dialog = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
         create_lead(session["name"], session["phone"], ASSISTANTS[assistant_key]["name"], dialog)
         del user_data[user_id]
         reply += "\n\n✅ Заявка принята! Менеджер свяжется с вами."
     return jsonify({"reply": reply})
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton(f"{a[chr(39)]emoji[chr(39)]} {a[chr(39)]name[chr(39)]}", callback_data=f"assistant_{k}")] for k, a in ASSISTANTS.items()]
+    keyboard = [[InlineKeyboardButton(f"{a['emoji']} {a['name']}", callback_data=f"assistant_{k}")] for k, a in ASSISTANTS.items()]
     await update.message.reply_text("👋 Добро пожаловать!\n\nЯ AI-ассистент. Выберите направление:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -85,7 +87,7 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not assistant:
         return
     tg_sessions[query.from_user.id] = {"assistant": key, "messages": [], "step": "name", "name": None, "phone": None}
-    await query.edit_message_text(f"{assistant[chr(39)]emoji[chr(39)]} *{assistant[chr(39)]name[chr(39)]}*\n\nМеня зовут Алекс. Как вас зовут?", parse_mode="Markdown")
+    await query.edit_message_text(f"{assistant['emoji']} *{assistant['name']}*\n\nМеня зовут Алекс. Как вас зовут?", parse_mode="Markdown")
 
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -102,7 +104,9 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if session["step"] == "phone":
         session["phone"] = text
         session["step"] = "dialog"
-        session["messages"].append({"role": "user", "content": f"Меня зовут {session[chr(39)]name[chr(39)]}, телефон {session[chr(39)]phone[chr(39)]}"})
+        name = session["name"]
+        phone = session["phone"]
+        session["messages"].append({"role": "user", "content": f"Меня зовут {name}, телефон {phone}"})
         reply = ask_claude(ASSISTANTS[session["assistant"]]["prompt"], session["messages"])
         session["messages"].append({"role": "assistant", "content": reply})
         await update.message.reply_text(reply)
@@ -113,11 +117,18 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session["messages"].append({"role": "assistant", "content": reply})
     if "ЛИД_ГОТОВ" in reply:
         reply = reply.replace("ЛИД_ГОТОВ", "").strip()
-        dialog = "\n".join([f"{m[chr(39)]role[chr(39)]}: {m[chr(39)]content[chr(39)]}" for m in session["messages"]])
+        dialog = "\n".join([f"{m['role']}: {m['content']}" for m in session["messages"]])
         lead_id = create_lead(session["name"], session["phone"], ASSISTANTS[session["assistant"]]["name"], dialog)
         if MANAGER_CHAT_ID:
             try:
-                await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=f"🔥 *Новый лид!*\n👤 {session[chr(39)]name[chr(39)]}\n📞 {session[chr(39)]phone[chr(39)]}\n📌 {ASSISTANTS[session[chr(39)]assistant[chr(39)]][chr(39)]name[chr(39)]}\n🔗 #{lead_id}", parse_mode="Markdown")
+                name = session["name"]
+                phone = session["phone"]
+                assistant_name = ASSISTANTS[session["assistant"]]["name"]
+                await context.bot.send_message(
+                    chat_id=MANAGER_CHAT_ID,
+                    text=f"🔥 *Новый лид!*\n👤 {name}\n📞 {phone}\n📌 {assistant_name}\n🔗 #{lead_id}",
+                    parse_mode="Markdown"
+                )
             except:
                 pass
         await update.message.reply_text(reply + "\n\n✅ Заявка принята!")
