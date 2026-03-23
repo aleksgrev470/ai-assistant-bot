@@ -15,6 +15,9 @@ BITRIX_WEBHOOK = os.environ.get("BITRIX_WEBHOOK")
 MANAGER_CHAT_ID = os.environ.get("MANAGER_CHAT_ID")
 PORT = int(os.environ.get("PORT", 8080))
 
+CHANNEL_ID = "@axentra_it"
+ADMIN_IDS = [656696027]
+
 ASSISTANTS = {
     "ai": {"name": "ИИ и автоматизация", "emoji": "🤖", "prompt": "Ты эксперт по внедрению ИИ и автоматизации бизнеса. Квалифицируй лида, узнай: название компании, какие процессы хотят автоматизировать, текущие боли, бюджет и сроки."},
     "crm": {"name": "CRM и ERP", "emoji": "📊", "prompt": "Ты эксперт по внедрению CRM и ERP систем. Квалифицируй лида, узнай: название компании, сферу бизнеса, сколько сотрудников, какая CRM используется, проблемы, бюджет."},
@@ -26,10 +29,12 @@ app = Flask(__name__, static_folder="webapp")
 user_data = {}
 tg_sessions = {}
 
+
 def ask_claude(system_prompt, messages):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(model="claude-sonnet-4-5", max_tokens=1024, system=system_prompt, messages=messages)
     return response.content[0].text
+
 
 def create_lead(name, phone, topic, dialog):
     url = BITRIX_WEBHOOK + "crm.lead.add.json"
@@ -40,11 +45,13 @@ def create_lead(name, phone, topic, dialog):
     except:
         return None
 
+
 @app.route("/")
 def index():
     resp = send_from_directory("webapp", "index.html")
     resp.headers["ngrok-skip-browser-warning"] = "true"
     return resp
+
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -75,9 +82,48 @@ def chat():
         reply += "\n\n✅ Заявка принята! Менеджер свяжется с вами."
     return jsonify({"reply": reply})
 
+
+async def publish_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        return
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("⚡️ ПОЛУЧИТЬ КОНСУЛЬТАЦИЮ ИИ", url="https://t.me/ITAxentra_bot/app")
+    ]])
+
+    try:
+        msg = update.message
+        if msg.photo:
+            photo = msg.photo[-1].file_id
+            caption = msg.caption or ""
+            await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
+            await msg.reply_text("✅ Пост с фото опубликован!")
+        elif msg.video:
+            video = msg.video.file_id
+            caption = msg.caption or ""
+            await context.bot.send_video(chat_id=CHANNEL_ID, video=video, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
+            await msg.reply_text("✅ Пост с видео опубликован!")
+        elif msg.text and not msg.text.startswith("/"):
+            await context.bot.send_message(chat_id=CHANNEL_ID, text=msg.text, parse_mode="Markdown", reply_markup=keyboard)
+            await msg.reply_text("✅ Пост опубликован!")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id in ADMIN_IDS:
+        await update.message.reply_text(
+            "👋 Привет, Алекс!\n\n"
+            "📝 Для публикации в канал:\n"
+            "• Отправь текст → опубликую с кнопкой\n"
+            "• Отправь фото/видео → опубликую с кнопкой\n\n"
+            "Или выбери раздел для консультации:"
+        )
     keyboard = [[InlineKeyboardButton(f"{a['emoji']} {a['name']}", callback_data=f"assistant_{k}")] for k, a in ASSISTANTS.items()]
-    await update.message.reply_text("👋 Добро пожаловать!\n\nЯ AI-ассистент. Выберите направление:", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text("Выберите направление:", reply_markup=InlineKeyboardMarkup(keyboard))
+
 
 async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -89,9 +135,15 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_sessions[query.from_user.id] = {"assistant": key, "messages": [], "step": "name", "name": None, "phone": None}
     await query.edit_message_text(f"{assistant['emoji']} *{assistant['name']}*\n\nМеня зовут Алекс. Как вас зовут?", parse_mode="Markdown")
 
+
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
+
+    if user_id in ADMIN_IDS:
+        await publish_post(update, context)
+        return
+
     if user_id not in tg_sessions:
         await start(update, context)
         return
@@ -136,35 +188,10 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(reply)
 
-CHANNEL_USERNAME = os.environ.get("CHANNEL_USERNAME", "@axentra_it")
-
-async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Автоматически добавляет кнопку AI Ассистент под каждый пост в канале."""
-    post = update.channel_post
-    if not post:
-        return
-    # Только посты из нашего канала
-    chat = post.chat
-    if chat.username and f"@{chat.username}" != CHANNEL_USERNAME:
-        return
-    # Не трогаем посты от самого бота (чтобы не зациклиться)
-    if post.from_user and post.from_user.is_bot:
-        return
-    # Добавляем кнопку к посту
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🤖 AI Ассистент", url="https://t.me/ITAxentra_bot/app")
-    ]])
-    try:
-        await context.bot.edit_message_reply_markup(
-            chat_id=post.chat_id,
-            message_id=post.message_id,
-            reply_markup=keyboard
-        )
-    except Exception as e:
-        logging.warning(f"Не удалось добавить кнопку к посту: {e}")
 
 def run_flask():
     app.run(host="0.0.0.0", port=PORT)
+
 
 def main():
     flask_thread = threading.Thread(target=run_flask, daemon=True)
@@ -173,11 +200,11 @@ def main():
     tg_app = Application.builder().token(TELEGRAM_TOKEN).build()
     tg_app.add_handler(CommandHandler("start", start))
     tg_app.add_handler(CallbackQueryHandler(handle_choice, pattern="^assistant_"))
+    tg_app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, publish_post))
     tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
-    # Обработчик постов канала — добавляет кнопку автоматически
-    tg_app.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_channel_post))
     print("Bot started!")
-    tg_app.run_polling(allowed_updates=["message", "callback_query", "channel_post"])
+    tg_app.run_polling()
+
 
 if __name__ == "__main__":
     main()
