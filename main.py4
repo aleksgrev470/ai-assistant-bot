@@ -1,0 +1,183 @@
+import os
+import logging
+import requests
+import anthropic
+import threading
+from flask import Flask, request, jsonify, send_from_directory
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+
+logging.basicConfig(level=logging.INFO)
+
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+BITRIX_WEBHOOK = os.environ.get("BITRIX_WEBHOOK")
+MANAGER_CHAT_ID = os.environ.get("MANAGER_CHAT_ID")
+PORT = int(os.environ.get("PORT", 8080))
+
+ASSISTANTS = {
+    "ai": {"name": "ИИ и автоматизация", "emoji": "🤖", "prompt": "Ты эксперт по внедрению ИИ и автоматизации бизнеса. Квалифицируй лида, узнай: название компании, какие процессы хотят автоматизировать, текущие боли, бюджет и сроки."},
+    "crm": {"name": "CRM и ERP", "emoji": "📊", "prompt": "Ты эксперт по внедрению CRM и ERP систем. Квалифицируй лида, узнай: название компании, сферу бизнеса, сколько сотрудников, какая CRM используется, проблемы, бюджет."},
+    "cyber": {"name": "Кибербезопасность", "emoji": "🔒", "prompt": "Ты эксперт по кибербезопасности и 152-ФЗ. Квалифицируй лида, узнай: компания, сфера, сотрудники, данные, аудит, бюджет."},
+    "iot": {"name": "IoT и цифровые двойники", "emoji": "🏭", "prompt": "Ты эксперт по IoT и цифровым двойникам. Квалифицируй лида, узнай: компания, отрасль, оборудование, задача, бюджет."}
+}
+
+app = Flask(__name__, static_folder="webapp")
+user_data = {}
+tg_sessions = {}
+
+def ask_claude(system_prompt, messages):
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    response = client.messages.create(model="claude-sonnet-4-5", max_tokens=1024, system=system_prompt, messages=messages)
+    return response.content[0].text
+
+def create_lead(name, phone, topic, dialog):
+    url = BITRIX_WEBHOOK + "crm.lead.add.json"
+    data = {"fields": {"TITLE": f"[Telegram] {topic} - {name}", "NAME": name, "PHONE": [{"VALUE": phone, "VALUE_TYPE": "WORK"}], "COMMENTS": dialog, "SOURCE_ID": "WEB"}}
+    try:
+        r = requests.post(url, json=data)
+        return r.json().get("result")
+    except:
+        return None
+
+@app.route("/")
+def index():
+    resp = send_from_directory("webapp", "index.html")
+    resp.headers["ngrok-skip-browser-warning"] = "true"
+    return resp
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.json
+    user_id = str(data.get("user_id", "0"))
+    assistant_key = data.get("assistant", "ai")
+    messages = data.get("messages", [])
+    if user_id not in user_data:
+        user_data[user_id] = {"name": None, "phone": None}
+    session = user_data[user_id]
+    last_msg = messages[-1]["content"] if messages else ""
+    if not session["name"]:
+        session["name"] = last_msg
+        return jsonify({"reply": f"Приятно познакомиться, {last_msg}! Укажите ваш номер телефона:"})
+    if not session["phone"]:
+        session["phone"] = last_msg
+        name = session["name"]
+        phone = session["phone"]
+        reply = ask_claude(ASSISTANTS[assistant_key]["prompt"], [{"role": "user", "content": f"Меня зовут {name}, телефон {phone}"}])
+        return jsonify({"reply": reply})
+    prompt = ASSISTANTS[assistant_key]["prompt"] + "\n\nЕсли собрал имя, телефон, компанию, задачу и бюджет — напиши ЛИД_ГОТОВ в конце."
+    reply = ask_claude(prompt, messages)
+    if "ЛИД_ГОТОВ" in reply:
+        reply = reply.replace("ЛИД_ГОТОВ", "").strip()
+        dialog = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
+        create_lead(session["name"], session["phone"], ASSISTANTS[assistant_key]["name"], dialog)
+        del user_data[user_id]
+        reply += "\n\n✅ Заявка принята! Менеджер свяжется с вами."
+    return jsonify({"reply": reply})
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton(f"{a['emoji']} {a['name']}", callback_data=f"assistant_{k}")] for k, a in ASSISTANTS.items()]
+    await update.message.reply_text("👋 Добро пожаловать!\n\nЯ AI-ассистент. Выберите направление:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    key = query.data.replace("assistant_", "")
+    assistant = ASSISTANTS.get(key)
+    if not assistant:
+        return
+    tg_sessions[query.from_user.id] = {"assistant": key, "messages": [], "step": "name", "name": None, "phone": None}
+    await query.edit_message_text(f"{assistant['emoji']} *{assistant['name']}*\n\nМеня зовут Алекс. Как вас зовут?", parse_mode="Markdown")
+
+async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text
+    if user_id not in tg_sessions:
+        await start(update, context)
+        return
+    session = tg_sessions[user_id]
+    if session["step"] == "name":
+        session["name"] = text
+        session["step"] = "phone"
+        await update.message.reply_text(f"Приятно познакомиться, {text}! Укажите телефон:")
+        return
+    if session["step"] == "phone":
+        session["phone"] = text
+        session["step"] = "dialog"
+        name = session["name"]
+        phone = session["phone"]
+        session["messages"].append({"role": "user", "content": f"Меня зовут {name}, телефон {phone}"})
+        reply = ask_claude(ASSISTANTS[session["assistant"]]["prompt"], session["messages"])
+        session["messages"].append({"role": "assistant", "content": reply})
+        await update.message.reply_text(reply)
+        return
+    session["messages"].append({"role": "user", "content": text})
+    prompt = ASSISTANTS[session["assistant"]]["prompt"] + "\n\nЕсли собрал имя, телефон, компанию, задачу и бюджет — напиши ЛИД_ГОТОВ в конце."
+    reply = ask_claude(prompt, session["messages"])
+    session["messages"].append({"role": "assistant", "content": reply})
+    if "ЛИД_ГОТОВ" in reply:
+        reply = reply.replace("ЛИД_ГОТОВ", "").strip()
+        dialog = "\n".join([f"{m['role']}: {m['content']}" for m in session["messages"]])
+        lead_id = create_lead(session["name"], session["phone"], ASSISTANTS[session["assistant"]]["name"], dialog)
+        if MANAGER_CHAT_ID:
+            try:
+                name = session["name"]
+                phone = session["phone"]
+                assistant_name = ASSISTANTS[session["assistant"]]["name"]
+                await context.bot.send_message(
+                    chat_id=MANAGER_CHAT_ID,
+                    text=f"🔥 *Новый лид!*\n👤 {name}\n📞 {phone}\n📌 {assistant_name}\n🔗 #{lead_id}",
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+        await update.message.reply_text(reply + "\n\n✅ Заявка принята!")
+        del tg_sessions[user_id]
+    else:
+        await update.message.reply_text(reply)
+
+CHANNEL_USERNAME = os.environ.get("CHANNEL_USERNAME", "@axentra_it")
+
+async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Автоматически добавляет кнопку AI Ассистент под каждый пост в канале."""
+    post = update.channel_post
+    if not post:
+        return
+    # Только посты из нашего канала
+    chat = post.chat
+    if chat.username and f"@{chat.username}" != CHANNEL_USERNAME:
+        return
+    # Не трогаем посты от самого бота (чтобы не зациклиться)
+    if post.from_user and post.from_user.is_bot:
+        return
+    # Добавляем кнопку к посту
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("⚡️ ПОЛУЧИТЬ КОНСУЛЬТАЦИЮ ИИ", url="https://t.me/ITAxentra_bot/app")
+    ]])
+    try:
+        await context.bot.edit_message_reply_markup(
+            chat_id=post.chat_id,
+            message_id=post.message_id,
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logging.warning(f"Не удалось добавить кнопку к посту: {e}")
+
+def run_flask():
+    app.run(host="0.0.0.0", port=PORT)
+
+def main():
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    print(f"Flask started on port {PORT}")
+    tg_app = Application.builder().token(TELEGRAM_TOKEN).build()
+    tg_app.add_handler(CommandHandler("start", start))
+    tg_app.add_handler(CallbackQueryHandler(handle_choice, pattern="^assistant_"))
+    tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
+    # Обработчик постов канала — добавляет кнопку автоматически
+    tg_app.add_handler(MessageHandler(filters.ChatType.CHANNEL, handle_channel_post))
+    print("Bot started!")
+    tg_app.run_polling(allowed_updates=["message", "callback_query", "channel_post"])
+
+if __name__ == "__main__":
+    main()
