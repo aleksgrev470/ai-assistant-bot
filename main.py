@@ -3,7 +3,7 @@ import logging
 import requests
 import anthropic
 import threading
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, make_response
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
@@ -30,6 +30,14 @@ user_data = {}
 tg_sessions = {}
 
 
+@app.after_request
+def add_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+    return response
+
+
 def ask_claude(system_prompt, messages):
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(model="claude-sonnet-4-5", max_tokens=1024, system=system_prompt, messages=messages)
@@ -53,8 +61,10 @@ def index():
     return resp
 
 
-@app.route("/chat", methods=["POST"])
+@app.route("/chat", methods=["POST", "OPTIONS"])
 def chat():
+    if request.method == "OPTIONS":
+        return make_response("", 200)
     data = request.json
     user_id = str(data.get("user_id", "0"))
     assistant_key = data.get("assistant", "ai")
@@ -87,22 +97,16 @@ async def publish_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in ADMIN_IDS:
         return
-
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("⚡️ ПОЛУЧИТЬ КОНСУЛЬТАЦИЮ ИИ", url="https://t.me/ITAxentra_bot/app")
-    ]])
-
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("⚡️ ПОЛУЧИТЬ КОНСУЛЬТАЦИЮ ИИ", url="https://t.me/ITAxentra_bot/app")]])
     try:
         msg = update.message
         if msg.photo:
             photo = msg.photo[-1].file_id
-            caption = msg.caption or ""
-            await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
+            await context.bot.send_photo(chat_id=CHANNEL_ID, photo=photo, caption=msg.caption or "", parse_mode="Markdown", reply_markup=keyboard)
             await msg.reply_text("✅ Пост с фото опубликован!")
         elif msg.video:
             video = msg.video.file_id
-            caption = msg.caption or ""
-            await context.bot.send_video(chat_id=CHANNEL_ID, video=video, caption=caption, parse_mode="Markdown", reply_markup=keyboard)
+            await context.bot.send_video(chat_id=CHANNEL_ID, video=video, caption=msg.caption or "", parse_mode="Markdown", reply_markup=keyboard)
             await msg.reply_text("✅ Пост с видео опубликован!")
         elif msg.text and not msg.text.startswith("/"):
             await context.bot.send_message(chat_id=CHANNEL_ID, text=msg.text, parse_mode="Markdown", reply_markup=keyboard)
@@ -114,13 +118,7 @@ async def publish_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in ADMIN_IDS:
-        await update.message.reply_text(
-            "👋 Привет, Алекс!\n\n"
-            "📝 Для публикации в канал:\n"
-            "• Отправь текст → опубликую с кнопкой\n"
-            "• Отправь фото/видео → опубликую с кнопкой\n\n"
-            "Или выбери раздел для консультации:"
-        )
+        await update.message.reply_text("👋 Привет, Алекс!\n\n📝 Отправь текст/фото/видео → опубликую в канал\n\nИли выбери раздел:")
     keyboard = [[InlineKeyboardButton(f"{a['emoji']} {a['name']}", callback_data=f"assistant_{k}")] for k, a in ASSISTANTS.items()]
     await update.message.reply_text("Выберите направление:", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -139,11 +137,9 @@ async def handle_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
-
     if user_id in ADMIN_IDS:
         await publish_post(update, context)
         return
-
     if user_id not in tg_sessions:
         await start(update, context)
         return
@@ -176,11 +172,7 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 name = session["name"]
                 phone = session["phone"]
                 assistant_name = ASSISTANTS[session["assistant"]]["name"]
-                await context.bot.send_message(
-                    chat_id=MANAGER_CHAT_ID,
-                    text=f"🔥 *Новый лид!*\n👤 {name}\n📞 {phone}\n📌 {assistant_name}\n🔗 #{lead_id}",
-                    parse_mode="Markdown"
-                )
+                await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=f"🔥 *Новый лид!*\n👤 {name}\n📞 {phone}\n📌 {assistant_name}\n🔗 #{lead_id}", parse_mode="Markdown")
             except:
                 pass
         await update.message.reply_text(reply + "\n\n✅ Заявка принята!")
