@@ -48,10 +48,25 @@ def create_lead(name, phone, topic, dialog):
     url = BITRIX_WEBHOOK + "crm.lead.add.json"
     data = {"fields": {"TITLE": f"[Telegram] {topic} - {name}", "NAME": name, "PHONE": [{"VALUE": phone, "VALUE_TYPE": "WORK"}], "COMMENTS": dialog, "SOURCE_ID": "WEB"}}
     try:
-        r = requests.post(url, json=data)
+        r = requests.post(url, json=data, timeout=10)
         return r.json().get("result")
-    except:
+    except Exception as e:
+        logging.error(f"Bitrix error: {e}")
         return None
+
+
+def send_tg_notification(name, phone, topic, lead_id):
+    if not MANAGER_CHAT_ID or not TELEGRAM_TOKEN:
+        return
+    try:
+        text = f"🔥 *Новый лид!*\n👤 {name}\n📞 {phone}\n📌 {topic}\n🔗 #{lead_id}"
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={"chat_id": MANAGER_CHAT_ID, "text": text, "parse_mode": "Markdown"},
+            timeout=10
+        )
+    except Exception as e:
+        logging.error(f"TG notification error: {e}")
 
 
 @app.route("/")
@@ -87,7 +102,8 @@ def chat():
     if "ЛИД_ГОТОВ" in reply:
         reply = reply.replace("ЛИД_ГОТОВ", "").strip()
         dialog = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
-        create_lead(session["name"], session["phone"], ASSISTANTS[assistant_key]["name"], dialog)
+        lead_id = create_lead(session["name"], session["phone"], ASSISTANTS[assistant_key]["name"], dialog)
+        send_tg_notification(session["name"], session["phone"], ASSISTANTS[assistant_key]["name"], lead_id)
         del user_data[user_id]
         reply += "\n\n✅ Заявка принята! Менеджер свяжется с вами."
     return jsonify({"reply": reply})
@@ -167,14 +183,7 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = reply.replace("ЛИД_ГОТОВ", "").strip()
         dialog = "\n".join([f"{m['role']}: {m['content']}" for m in session["messages"]])
         lead_id = create_lead(session["name"], session["phone"], ASSISTANTS[session["assistant"]]["name"], dialog)
-        if MANAGER_CHAT_ID:
-            try:
-                name = session["name"]
-                phone = session["phone"]
-                assistant_name = ASSISTANTS[session["assistant"]]["name"]
-                await context.bot.send_message(chat_id=MANAGER_CHAT_ID, text=f"🔥 *Новый лид!*\n👤 {name}\n📞 {phone}\n📌 {assistant_name}\n🔗 #{lead_id}", parse_mode="Markdown")
-            except:
-                pass
+        send_tg_notification(session["name"], session["phone"], ASSISTANTS[session["assistant"]]["name"], lead_id)
         await update.message.reply_text(reply + "\n\n✅ Заявка принята!")
         del tg_sessions[user_id]
     else:
