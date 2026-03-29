@@ -384,11 +384,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👋 Привет, Алекс!\n\n"
             "📝 *Публикация постов:*\n"
             "• Отправь текст/фото/видео → опубликую в канал\n"
-            "• /пост [тема] → AI сгенерирует пост\n\n"
+            "• /post [тема] → AI сгенерирует пост\n\n"
             "Примеры:\n"
-            "`/пост автоматизация договоров`\n"
-            "`/пост кибербезопасность для бизнеса`\n"
-            "`/пост ROI от внедрения CRM`",
+            "`/post автоматизация договоров`\n"
+            "`/post кибербезопасность для бизнеса`\n"
+            "`/post ROI от внедрения CRM`",
             parse_mode="Markdown"
         )
         return
@@ -480,7 +480,6 @@ def main():
     print(f"Flask started on port {PORT}")
     tg_app = Application.builder().token(TELEGRAM_TOKEN).build()
     tg_app.add_handler(CommandHandler("start", start))
-    tg_app.add_handler(CommandHandler("пост", generate_post))
     tg_app.add_handler(CommandHandler("post", generate_post))
     tg_app.add_handler(CallbackQueryHandler(post_action, pattern="^post_"))
     tg_app.add_handler(CallbackQueryHandler(handle_callback))
