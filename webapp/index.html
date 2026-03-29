@@ -274,7 +274,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .primary-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── CHAT SCREEN ── */
-#chat { background: var(--bg); display: flex; flex-direction: column; height: 100vh; }
+#chat { background: var(--bg); flex-direction: column; height: 100vh; }
 .chat-header {
   background: var(--bg2);
   padding: 12px 16px;
@@ -436,6 +436,85 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   transition: opacity 0.2s;
 }
 .send-btn:active { opacity: 0.8; }
+
+/* ── AI CTA BUTTON ── */
+.ai-cta-wrap { padding: 12px 16px 4px; }
+.ai-cta-btn {
+  background: linear-gradient(135deg, rgba(108,99,255,0.2), rgba(157,80,187,0.2));
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 20px rgba(108,99,255,0.2);
+}
+.ai-cta-btn:active { transform: scale(0.98); opacity: 0.85; }
+.ai-cta-icon { font-size: 28px; flex-shrink: 0; }
+.ai-cta-text { flex: 1; }
+.ai-cta-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.ai-cta-sub { font-size: 12px; color: #a0a0ff; margin-top: 2px; }
+.ai-cta-arrow { font-size: 22px; color: var(--accent); font-weight: 700; }
+
+/* ── SECTION SCREENS ── */
+.section-header {
+  background: var(--bg2);
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+.section-title-h { font-size: 17px; font-weight: 700; flex: 1; }
+.section-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; padding-bottom: 40px; }
+
+/* ── CASES ── */
+.case-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+.case-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px; }
+.case-tag.ai { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.case-tag.crm { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.case-tag.iot { background: rgba(34,197,94,0.15); color: #4ade80; }
+.case-tag.med { background: rgba(236,72,153,0.15); color: #f472b6; }
+.case-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+.case-desc { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 12px; }
+.case-results { display: flex; flex-direction: column; gap: 8px; }
+.case-result { display: flex; align-items: center; gap: 10px; background: var(--card2); border-radius: 10px; padding: 8px 12px; }
+.res-icon { font-size: 20px; flex-shrink: 0; }
+.case-result b { font-size: 14px; }
+.case-result div { font-size: 12px; color: var(--muted); }
+.case-cta { text-align: center; padding: 8px 0; }
+.case-cta-text { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+
+/* ── ROI ── */
+.roi-desc { font-size: 14px; color: var(--muted); text-align: center; line-height: 1.5; }
+.roi-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.roi-label { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--muted); }
+.roi-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.roi-btn { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+.roi-btn.selected { background: rgba(108,99,255,0.2); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.roi-btn:active { opacity: 0.7; }
+.roi-result { background: linear-gradient(135deg, rgba(108,99,255,0.15), rgba(157,80,187,0.15)); border: 1px solid var(--border); border-radius: 16px; padding: 20px; text-align: center; }
+.roi-result-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.roi-result-num { font-size: 28px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+.roi-result-sub { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.roi-result-note { font-size: 11px; color: var(--muted); }
+
+/* ── ABOUT ── */
+.about-hero { text-align: center; padding: 16px 0 8px; }
+.about-logo { font-size: 48px; margin-bottom: 8px; }
+.about-name { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+.about-tagline { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.about-stats { display: flex; gap: 12px; }
+.about-stat { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; text-align: center; }
+.stat-num { font-size: 24px; font-weight: 800; color: var(--accent); }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.about-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.about-card-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+.about-card-text { font-size: 14px; color: var(--muted); line-height: 1.6; }
+.about-services { display: flex; flex-direction: column; gap: 8px; }
+.about-service { font-size: 14px; padding: 8px 12px; background: var(--card2); border-radius: 10px; }
+.about-contacts { display: flex; flex-direction: column; gap: 8px; }
+.about-contact { font-size: 14px; padding: 10px 14px; background: var(--card2); border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.about-contact:active { opacity: 0.7; }
 </style>
 </head>
 <body>
@@ -533,10 +612,177 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     </div>
   </div>
 
+  <!-- AI Consultant CTA -->
+  <div class="ai-cta-wrap">
+    <div class="ai-cta-btn" onclick="startOnboarding('ai')">
+      <div class="ai-cta-icon">🤖</div>
+      <div class="ai-cta-text">
+        <div class="ai-cta-title">AI Консультант</div>
+        <div class="ai-cta-sub">Бесплатная консультация за 5 минут</div>
+      </div>
+      <div class="ai-cta-arrow">›</div>
+    </div>
+  </div>
+
   <div class="bottom-nav">
-    <div class="nav-btn"><span>📂</span>Кейсы</div>
-    <div class="nav-btn"><span>🧮</span>ROI</div>
-    <div class="nav-btn"><span>ℹ️</span>О нас</div>
+    <div class="nav-btn" onclick="showSection('cases')"><span>📂</span>Кейсы</div>
+    <div class="nav-btn" onclick="showSection('roi')"><span>🧮</span>ROI</div>
+    <div class="nav-btn" onclick="showSection('about')"><span>ℹ️</span>О нас</div>
+  </div>
+</div>
+
+<!-- CASES SCREEN -->
+<div id="cases" class="screen">
+  <div class="section-header">
+    <div class="back-btn" onclick="showSection('home')">‹</div>
+    <div class="section-title-h">Наши кейсы</div>
+  </div>
+  <div class="section-body">
+    <div class="case-card">
+      <div class="case-tag ai">ИИ и автоматизация</div>
+      <div class="case-title">Металлопром — автоматизация договоров</div>
+      <div class="case-desc">Компания 180 сотрудников. Согласование договоров занимало 3 дня. После внедрения AI-документооборота — 4 часа.</div>
+      <div class="case-results">
+        <div class="case-result"><span class="res-icon">⚡</span><div><b>3 дня → 4 часа</b><br>согласование договоров</div></div>
+        <div class="case-result"><span class="res-icon">💰</span><div><b>−2.1M ₽/год</b><br>экономия на процессах</div></div>
+        <div class="case-result"><span class="res-icon">📅</span><div><b>3 месяца</b><br>срок внедрения</div></div>
+      </div>
+    </div>
+    <div class="case-card">
+      <div class="case-tag crm">CRM и ERP</div>
+      <div class="case-title">СтройГрупп — внедрение Bitrix24</div>
+      <div class="case-desc">Строительная компания, 65 сотрудников. До внедрения — сделки терялись в Excel. После — воронка продаж под контролем.</div>
+      <div class="case-results">
+        <div class="case-result"><span class="res-icon">📈</span><div><b>+40% выручка</b><br>за первые 6 месяцев</div></div>
+        <div class="case-result"><span class="res-icon">⏱</span><div><b>−60% времени</b><br>на отчётность</div></div>
+        <div class="case-result"><span class="res-icon">🎯</span><div><b>0 потерянных</b><br>сделок</div></div>
+      </div>
+    </div>
+    <div class="case-card">
+      <div class="case-tag iot">IoT производство</div>
+      <div class="case-title">Завод стройматериалов — цифровой двойник</div>
+      <div class="case-desc">240 рабочих, производственная линия. Установили 80 датчиков, внедрили предиктивное обслуживание оборудования.</div>
+      <div class="case-results">
+        <div class="case-result"><span class="res-icon">🔧</span><div><b>−40% простоев</b><br>незапланированных</div></div>
+        <div class="case-result"><span class="res-icon">💵</span><div><b>ROI за 14 мес.</b><br>полная окупаемость</div></div>
+        <div class="case-result"><span class="res-icon">📊</span><div><b>80 датчиков</b><br>в реальном времени</div></div>
+      </div>
+    </div>
+    <div class="case-card">
+      <div class="case-tag med">Медицина</div>
+      <div class="case-title">МедКлиника — AI-запись пациентов</div>
+      <div class="case-desc">Сеть клиник, 22 врача. Автоматизировали запись и напоминания через бота. Пациенты перестали забывать о визитах.</div>
+      <div class="case-results">
+        <div class="case-result"><span class="res-icon">🚫</span><div><b>−70% no-show</b><br>неявок пациентов</div></div>
+        <div class="case-result"><span class="res-icon">😊</span><div><b>+25% NPS</b><br>удовлетворённость</div></div>
+        <div class="case-result"><span class="res-icon">💬</span><div><b>24/7 запись</b><br>без операторов</div></div>
+      </div>
+    </div>
+    <div class="case-cta">
+      <div class="case-cta-text">Хотите такой же результат?</div>
+      <div class="primary-btn" onclick="startOnboarding('ai')">Получить бесплатную консультацию</div>
+    </div>
+  </div>
+</div>
+
+<!-- ROI CALCULATOR SCREEN -->
+<div id="roi" class="screen">
+  <div class="section-header">
+    <div class="back-btn" onclick="showSection('home')">‹</div>
+    <div class="section-title-h">Калькулятор ROI</div>
+  </div>
+  <div class="section-body">
+    <div class="roi-desc">Оцените потенциальную экономию от автоматизации для вашей компании</div>
+
+    <div class="roi-card">
+      <div class="roi-label">Количество сотрудников</div>
+      <div class="roi-btns" id="roi-size">
+        <div class="roi-btn selected" data-val="10" onclick="roiSelect('size', 10, this)">до 15</div>
+        <div class="roi-btn" data-val="30" onclick="roiSelect('size', 30, this)">16–50</div>
+        <div class="roi-btn" data-val="100" onclick="roiSelect('size', 100, this)">51–200</div>
+        <div class="roi-btn" data-val="300" onclick="roiSelect('size', 300, this)">200+</div>
+      </div>
+    </div>
+
+    <div class="roi-card">
+      <div class="roi-label">Направление автоматизации</div>
+      <div class="roi-btns" id="roi-dir">
+        <div class="roi-btn selected" data-val="1.5" onclick="roiSelect('dir', 1.5, this)">ИИ / Боты</div>
+        <div class="roi-btn" data-val="1.2" onclick="roiSelect('dir', 1.2, this)">CRM / ERP</div>
+        <div class="roi-btn" data-val="1.8" onclick="roiSelect('dir', 1.8, this)">IoT</div>
+        <div class="roi-btn" data-val="1.3" onclick="roiSelect('dir', 1.3, this)">BI / Аналитика</div>
+      </div>
+    </div>
+
+    <div class="roi-card">
+      <div class="roi-label">Часов на ручные процессы в неделю</div>
+      <div class="roi-btns" id="roi-hours">
+        <div class="roi-btn selected" data-val="5" onclick="roiSelect('hours', 5, this)">до 5 ч</div>
+        <div class="roi-btn" data-val="15" onclick="roiSelect('hours', 15, this)">5–20 ч</div>
+        <div class="roi-btn" data-val="40" onclick="roiSelect('hours', 40, this)">20–60 ч</div>
+        <div class="roi-btn" data-val="100" onclick="roiSelect('hours', 100, this)">60+ ч</div>
+      </div>
+    </div>
+
+    <div class="roi-result" id="roi-result">
+      <div class="roi-result-title">Потенциальная экономия</div>
+      <div class="roi-result-num" id="roi-num">750 000 ₽/год</div>
+      <div class="roi-result-sub" id="roi-sub">Окупаемость: 6–9 месяцев</div>
+      <div class="roi-result-note">* Оценка на основе средних показателей по отрасли</div>
+    </div>
+
+    <div class="primary-btn" onclick="startOnboarding('ai')" style="margin: 0 0 32px;">Получить точный расчёт</div>
+  </div>
+</div>
+
+<!-- ABOUT SCREEN -->
+<div id="about" class="screen">
+  <div class="section-header">
+    <div class="back-btn" onclick="showSection('home')">‹</div>
+    <div class="section-title-h">О компании</div>
+  </div>
+  <div class="section-body">
+    <div class="about-hero">
+      <div class="about-logo">⚡</div>
+      <div class="about-name">AXENTRA IT</div>
+      <div class="about-tagline">Цифровая трансформация бизнеса</div>
+    </div>
+
+    <div class="about-stats">
+      <div class="about-stat"><div class="stat-num">47+</div><div class="stat-label">проектов</div></div>
+      <div class="about-stat"><div class="stat-num">5</div><div class="stat-label">лет опыта</div></div>
+      <div class="about-stat"><div class="stat-num">38</div><div class="stat-label">клиентов</div></div>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-title">🎯 Наша миссия</div>
+      <div class="about-card-text">Помогаем компаниям среднего бизнеса автоматизировать рутинные процессы и использовать ИИ для роста выручки — без лишних рисков и сложностей.</div>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-title">🏆 Что мы делаем</div>
+      <div class="about-services">
+        <div class="about-service">🤖 ИИ и автоматизация процессов</div>
+        <div class="about-service">📊 Внедрение CRM и ERP систем</div>
+        <div class="about-service">🔒 Кибербезопасность и 152-ФЗ</div>
+        <div class="about-service">🏭 IoT и цифровые двойники</div>
+        <div class="about-service">📈 Аналитика данных и BI</div>
+      </div>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-title">📍 Контакты</div>
+      <div class="about-contacts">
+        <div class="about-contact" onclick="window.open('https://t.me/Alex_AXENTRA','_blank')">
+          <span>✈️</span> Telegram: @Alex_AXENTRA
+        </div>
+        <div class="about-contact" onclick="window.open('https://t.me/axentra_it','_blank')">
+          <span>📢</span> Канал: @axentra_it
+        </div>
+      </div>
+    </div>
+
+    <div class="primary-btn" onclick="startOnboarding('ai')" style="margin: 0 0 32px;">Начать консультацию</div>
   </div>
 </div>
 
@@ -652,13 +898,35 @@ function getTime() {
 }
 
 function showScreen(id) {
+  // For section screens, delegate to showSection
+  if (['home','cases','roi','about'].includes(id)) { showSection(id); return; }
   document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.display='none'; });
   const s = document.getElementById(id);
-  s.style.display = 'flex';
-  s.classList.add('active');
+  if (s) { s.style.display='flex'; s.classList.add('active'); }
 }
 
-function goHome() { showScreen('home'); }
+function goHome() { showSection('home'); }
+
+function showSection(id) {
+  document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.display='none'; });
+  const s = document.getElementById(id);
+  if (s) { s.style.display='flex'; s.classList.add('active'); }
+}
+
+// ROI Calculator
+const roiState = { size: 10, dir: 1.5, hours: 5 };
+function roiSelect(key, val, el) {
+  roiState[key] = val;
+  el.closest('.roi-btns').querySelectorAll('.roi-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  updateROI();
+}
+function updateROI() {
+  const savings = Math.round(roiState.size * roiState.dir * roiState.hours * 52 * 450 / 1000) * 1000;
+  const months = savings < 500000 ? '8–12' : savings < 2000000 ? '6–9' : savings < 5000000 ? '4–7' : '3–5';
+  document.getElementById('roi-num').textContent = savings.toLocaleString('ru-RU') + ' ₽/год';
+  document.getElementById('roi-sub').textContent = 'Окупаемость: ' + months + ' месяцев';
+}
 
 function startOnboarding(dir) {
   state.direction = dir;
