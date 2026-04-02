@@ -352,20 +352,46 @@ async def publish_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         msg = update.message
         if msg.photo:
-            await context.bot.send_photo(
-                chat_id=CHANNEL_ID,
-                photo=msg.photo[-1].file_id,
-                caption=msg.caption or "",
-                reply_markup=channel_keyboard()
-            )
+            caption = msg.caption or ""
+            if len(caption) <= 1024:
+                # Короткая подпись — отправляем вместе с фото
+                await context.bot.send_photo(
+                    chat_id=CHANNEL_ID,
+                    photo=msg.photo[-1].file_id,
+                    caption=caption,
+                    reply_markup=channel_keyboard()
+                )
+            else:
+                # Длинный текст — фото отдельно, текст отдельно с кнопкой
+                await context.bot.send_photo(
+                    chat_id=CHANNEL_ID,
+                    photo=msg.photo[-1].file_id,
+                )
+                await context.bot.send_message(
+                    chat_id=CHANNEL_ID,
+                    text=caption,
+                    reply_markup=channel_keyboard()
+                )
             await msg.reply_text("✅ Пост с фото опубликован в канале!")
         elif msg.video:
-            await context.bot.send_video(
-                chat_id=CHANNEL_ID,
-                video=msg.video.file_id,
-                caption=msg.caption or "",
-                reply_markup=channel_keyboard()
-            )
+            caption = msg.caption or ""
+            if len(caption) <= 1024:
+                await context.bot.send_video(
+                    chat_id=CHANNEL_ID,
+                    video=msg.video.file_id,
+                    caption=caption,
+                    reply_markup=channel_keyboard()
+                )
+            else:
+                await context.bot.send_video(
+                    chat_id=CHANNEL_ID,
+                    video=msg.video.file_id,
+                )
+                await context.bot.send_message(
+                    chat_id=CHANNEL_ID,
+                    text=caption,
+                    reply_markup=channel_keyboard()
+                )
             await msg.reply_text("✅ Пост с видео опубликован в канале!")
         elif msg.text and not msg.text.startswith("/"):
             await context.bot.send_message(
@@ -490,7 +516,7 @@ def main():
     tg_app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, publish_post))
     tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
     logging.info("Bot started!")
-    tg_app.run_polling()
+    tg_app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
