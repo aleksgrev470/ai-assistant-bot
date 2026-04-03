@@ -4,6 +4,8 @@ import logging
 import requests
 import anthropic
 import threading
+import time
+from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, make_response
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -12,11 +14,162 @@ logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-BITRIX_WEBHOOK = os.environ.get("BITRIX_WEBHOOK")
-MANAGER_CHAT_ID = os.environ.get("MANAGER_CHAT_ID")
+BITRIX_WEBHOOK = os.environ.get("BITRIX_WEBHOOK", "https://b24-td0p92.bitrix24.ru/rest/1/faj08tdjrib2jx0d/")
+MANAGER_CHAT_ID = os.environ.get("MANAGER_CHAT_ID", "656696027")
+AVITO_CLIENT_ID = os.environ.get("AVITO_CLIENT_ID", "")
+AVITO_CLIENT_SECRET = os.environ.get("AVITO_CLIENT_SECRET", "")
 PORT = int(os.environ.get("PORT", 8080))
 CHANNEL_ID = "@axentra_it"
 ADMIN_IDS = [656696027]
+
+# ── Авито: хранение состояния ──────────────────────────────────────────
+avito_last_message_ids = set()   # уже обработанные ID сообщений
+avito_token_cache = {"token": None, "expires_at": 0}
+
+
+def get_avito_token():
+    """Получить OAuth токен Авито (кешируется)."""
+    if not AVITO_CLIENT_ID or not AVITO_CLIENT_SECRET:
+        return None
+    now = time.time()
+    if avito_token_cache["token"] and avito_token_cache["expires_at"] > now + 60:
+        return avito_token_cache["token"]
+    try:
+        r = requests.post(
+            "https://api.avito.ru/token",
+            data={
+                "client_id": AVITO_CLIENT_ID,
+                "client_secret": AVITO_CLIENT_SECRET,
+                "grant_type": "client_credentials",
+            },
+            timeout=10,
+        )
+        data = r.json()
+        token = data.get("access_token")
+        expires_in = data.get("expires_in", 3600)
+        if token:
+            avito_token_cache["token"] = token
+            avito_token_cache["expires_at"] = now + expires_in
+            logging.info("Avito token refreshed")
+        return token
+    except Exception as e:
+        logging.error(f"Avito token error: {e}")
+        return None
+
+
+def get_avito_new_messages():
+    """Получить новые необработанные сообщения с Авито."""
+    token = get_avito_token()
+    if not token:
+        return []
+    try:
+        # Получаем список чатов
+        r = requests.get(
+            "https://api.avito.ru/messenger/v3/accounts/self/chats",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"unread_only": "true", "limit": 10},
+            timeout=10,
+        )
+        chats = r.json().get("chats", [])
+        new_messages = []
+        for chat in chats:
+            chat_id = chat.get("id")
+            last_msg = chat.get("last_message", {})
+            msg_id = last_msg.get("id")
+            if msg_id and msg_id not in avito_last_message_ids:
+                avito_last_message_ids.add(msg_id)
+                # Не уведомляем о своих сообщениях
+                if not last_msg.get("is_outgoing", False):
+                    new_messages.append({
+                        "chat_id": chat_id,
+                        "msg_id": msg_id,
+                        "text": last_msg.get("content", {}).get("text", "Новое сообщение"),
+                        "author": chat.get("users", [{}])[0].get("name", "Клиент"),
+                        "chat_url": f"https://www.avito.ru/profile/messenger/{chat_id}",
+                    })
+        return new_messages
+    except Exception as e:
+        logging.error(f"Avito messages error: {e}")
+        return []
+
+
+def notify_avito_message(msg):
+    """Отправить уведомление в Telegram + создать лид в Битрикс24."""
+    admin_id = 656696027
+    text = (
+        f"📩 НОВОЕ СООБЩЕНИЕ НА АВИТО\n\n"
+        f"👤 От: {msg['author']}\n"
+        f"💬 {msg['text'][:300]}\n\n"
+        f"🔗 Открыть чат: avito.ru/profile/messenger/{msg['chat_id']}\n"
+        f"⏰ {datetime.now().strftime('%H:%M %d.%m')}"
+    )
+    # Уведомление в Telegram
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={
+                "chat_id": admin_id,
+                "text": text,
+                "reply_markup": {
+                    "inline_keyboard": [[
+                        {"text": "📱 Открыть Авито", "url": f"https://avito.ru/profile/messenger/{msg['chat_id']}"}
+                    ]]
+                }
+            },
+            timeout=10,
+        )
+        logging.info(f"Avito notification sent for msg {msg['msg_id']}")
+    except Exception as e:
+        logging.error(f"TG avito notify error: {e}")
+
+    # Создать лид в Битрикс24
+    if BITRIX_WEBHOOK:
+        try:
+            requests.post(
+                BITRIX_WEBHOOK + "crm.lead.add.json",
+                json={"fields": {
+                    "TITLE": f"Авито — {msg['author']}",
+                    "NAME": msg["author"],
+                    "COMMENTS": f"Сообщение с Авито:\n{msg['text']}\n\nСсылка: avito.ru/profile/messenger/{msg['chat_id']}",
+                    "SOURCE_ID": "WEB",
+                    "SOURCE_DESCRIPTION": "Авито",
+                }},
+                timeout=10,
+            )
+        except Exception as e:
+            logging.error(f"Bitrix avito lead error: {e}")
+
+
+def avito_polling_loop():
+    """Фоновый поток: проверяет новые сообщения Авито каждые 2 минуты."""
+    logging.info("Avito polling started")
+    # Первый запуск — загружаем текущие ID чтобы не слать уведомления о старых
+    time.sleep(15)
+    try:
+        token = get_avito_token()
+        if token:
+            r = requests.get(
+                "https://api.avito.ru/messenger/v3/accounts/self/chats",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"limit": 50},
+                timeout=10,
+            )
+            for chat in r.json().get("chats", []):
+                msg_id = chat.get("last_message", {}).get("id")
+                if msg_id:
+                    avito_last_message_ids.add(msg_id)
+            logging.info(f"Avito: loaded {len(avito_last_message_ids)} existing message IDs")
+    except Exception as e:
+        logging.error(f"Avito init error: {e}")
+
+    while True:
+        try:
+            new_msgs = get_avito_new_messages()
+            for msg in new_msgs:
+                notify_avito_message(msg)
+        except Exception as e:
+            logging.error(f"Avito polling error: {e}")
+        time.sleep(120)  # каждые 2 минуты
 
 DIRECTION_NAMES = {
     "ai": "ИИ и автоматизация",
@@ -76,6 +229,7 @@ app = Flask(__name__, static_folder="webapp")
 tg_sessions = {}
 notified_users = set()
 pending_posts = {}
+tg_app_global = None
 
 
 @app.after_request
@@ -84,6 +238,17 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
     return response
+
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    import asyncio
+    from telegram import Update
+    if tg_app_global:
+        data = request.get_json(force=True)
+        update = Update.de_json(data, tg_app_global.bot)
+        asyncio.run(tg_app_global.process_update(update))
+    return "ok", 200
 
 
 def calculate_lead_score(lead):
@@ -404,6 +569,30 @@ async def publish_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Ошибка: {e}")
 
 
+async def check_avito(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /checkavito — ручная проверка новых сообщений Авито."""
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        return
+    await update.message.reply_text("🔍 Проверяю Авито...")
+    if not AVITO_CLIENT_ID:
+        await update.message.reply_text(
+            "⚠️ AVITO_CLIENT_ID не настроен.\n\n"
+            "Добавьте в Railway переменные:\n"
+            "AVITO_CLIENT_ID=...\n"
+            "AVITO_CLIENT_SECRET=...\n\n"
+            "Ключи: developers.avito.ru → Мои приложения"
+        )
+        return
+    msgs = get_avito_new_messages()
+    if not msgs:
+        await update.message.reply_text("✅ Новых сообщений нет")
+    else:
+        for msg in msgs:
+            notify_avito_message(msg)
+        await update.message.reply_text(f"📩 Найдено {len(msgs)} новых сообщений — уведомления отправлены!")
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in ADMIN_IDS:
@@ -413,6 +602,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• Отправь текст → опубликую с кнопкой AI Assistant\n"
             "• Отправь фото/видео → опубликую с кнопкой\n"
             "• /post [тема] → AI сгенерирует пост\n\n"
+            "📩 Авито уведомления:\n"
+            "• /checkavito → проверить новые сообщения\n"
+            "• Автопроверка каждые 2 минуты (при наличии API ключей)\n\n"
             "Примеры:\n"
             "/post автоматизация договоров\n"
             "/post кибербезопасность для бизнеса"
@@ -499,25 +691,41 @@ async def handle_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply)
 
 
-def run_flask():
-    app.run(host="0.0.0.0", port=PORT)
-
-
 def main():
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    logging.info(f"Flask started on port {PORT}")
+    global tg_app_global
+    import asyncio
 
+    # Build Telegram app
     tg_app = Application.builder().token(TELEGRAM_TOKEN).build()
     tg_app.add_handler(CommandHandler("start", start))
     tg_app.add_handler(CommandHandler("post", generate_post))
+    tg_app.add_handler(CommandHandler("checkavito", check_avito))
     tg_app.add_handler(CallbackQueryHandler(post_action, pattern="^post_"))
     tg_app.add_handler(CallbackQueryHandler(handle_callback))
     tg_app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, publish_post))
     tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_msg))
-    logging.info("Bot started!")
-    tg_app.run_polling(drop_pending_updates=True)
+    tg_app_global = tg_app
+
+    # Start Avito polling in background thread
+    polling_thread = threading.Thread(target=avito_polling_loop, daemon=True)
+    polling_thread.start()
+    logging.info("Avito polling thread started")
+
+    # Set webhook
+    WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://ai-assistant-bot-production-c8e4.up.railway.app")
+    async def setup():
+        await tg_app.initialize()
+        await tg_app.bot.set_webhook(
+            url=f"{WEBHOOK_URL}/webhook",
+            drop_pending_updates=True
+        )
+        logging.info(f"Webhook set: {WEBHOOK_URL}/webhook")
+    asyncio.run(setup())
+
+    # Start Flask (handles both /chat and /webhook)
+    logging.info(f"Starting Flask on port {PORT}")
+    app.run(host="0.0.0.0", port=PORT)
 
 
 if __name__ == "__main__":
-    main()
+    main()Add Avito notifications + Bitrix24
